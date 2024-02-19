@@ -8,13 +8,16 @@ public class DataLogger : IPlottable, IManagesAxisLimits
 {
     public bool IsVisible { get; set; } = true;
     public IAxes Axes { get; set; } = ScottPlot.Axes.Default;
+    public string Label { get; set; } = string.Empty;
     public DataLoggerSource Data { get; set; } = new();
-    public IEnumerable<LegendItem> LegendItems => LegendItem.None;
 
     public bool ManageAxisLimits { get; set; } = true;
     public IAxisLimitManager AxisManager { get; set; } = new Full();
 
     public AxisLimits GetAxisLimits() => Data.GetAxisLimits();
+
+    public IEnumerable<LegendItem> LegendItems => LegendItem.Single(Label, LineStyle);
+
     public LineStyle LineStyle = new();
     public Color Color { get => LineStyle.Color; set => LineStyle.Color = value; }
 
