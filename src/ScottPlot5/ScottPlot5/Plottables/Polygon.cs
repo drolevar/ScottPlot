@@ -8,7 +8,9 @@ public class Polygon : IPlottable
 {
     public static Polygon Empty => new();
 
-    public bool IsEmpty { get; private set; } = false;
+    public bool IsEmpty => Coordinates.Length == 0;
+
+    public bool Close { get; set; } = true;
 
     // TODO: replace with a generic data source
     public Coordinates[] Coordinates { get; private set; } = Array.Empty<Coordinates>();
@@ -21,7 +23,7 @@ public class Polygon : IPlottable
     public FillStyle FillStyle { get; set; } = new() { Color = Colors.LightGray };
     public MarkerStyle MarkerStyle { get; set; } = MarkerStyle.None;
 
-    public int PointCount { get => Coordinates.Length; }
+    public int PointCount => Coordinates.Length;
 
     public IAxes Axes { get; set; } = new Axes();
 
@@ -37,8 +39,7 @@ public class Polygon : IPlottable
 
     private Polygon()
     {
-        Coordinates = new Coordinates[0];
-        IsEmpty = true;
+        Coordinates = Array.Empty<Coordinates>();
     }
 
     /// <summary>
@@ -56,12 +57,11 @@ public class Polygon : IPlottable
         return $"PlottablePolygon{label} with {PointCount} points";
     }
 
-    public void UpdateCoordinates(Coordinates[] newCoordinates)
+    private void UpdateCoordinates(Coordinates[] newCoordinates)
     {
         Coordinates = newCoordinates;
 
         limits = AxisLimits.NoLimits;
-        IsEmpty = !Coordinates.Any();
         if (IsEmpty) return;
 
         double xMin = Coordinates[0].X;
@@ -90,44 +90,20 @@ public class Polygon : IPlottable
         if (IsEmpty)
             return;
 
-        bool close = true; // TODO: make property
-        var coordinates = close
+        var coordinates = Close
             ? Coordinates.Concat(new[] { Coordinates.First() })
             : Coordinates;
+        
         IEnumerable<Pixel> pixels = coordinates.Select(Axes.GetPixel);
 
-        // TODO: stop using skia primitives directly
-        IEnumerable<SKPoint> skPoints = pixels.Select(x => x.ToSKPoint());
-        using SKPath path = new();
-        SKPoint firstPoint = skPoints.First();
-        path.MoveTo(firstPoint);
-        float xMax, xMin, yMax, yMin;
-        xMax = xMin = firstPoint.X;
-        yMax = yMin = firstPoint.Y;
-        foreach (SKPoint p in skPoints.Skip(1))
-        {
-            xMax = Math.Max(xMax, p.X);
-            xMin = Math.Min(xMin, p.X);
-            yMax = Math.Max(yMax, p.Y);
-            yMin = Math.Min(yMin, p.Y);
-            path.LineTo(p);
-        }
-
         using var paint = new SKPaint();
-        if (FillStyle.HasValue)
+        if (Close && FillStyle.HasValue)
         {
-            FillStyle.ApplyToPaint(paint, new PixelRect(xMin, xMax, yMin, yMax));
-            paint.Style = SKPaintStyle.Fill;
-            rp.Canvas.DrawPath(path, paint);
+            FillStyle.ApplyToPaint(paint, Axes.GetPixelRect(limits.Rect));
+            Drawing.DrawLines(rp.Canvas, paint, pixels);
         }
 
-        if (LineStyle is { IsVisible: true, Width: > 0 })
-        {
-            paint.Style = SKPaintStyle.Stroke;
-            LineStyle.ApplyToPaint(paint);
-            rp.Canvas.DrawPath(path, paint);
-            Drawing.DrawLines(rp.Canvas, paint, pixels, LineStyle);
-        }
+        Drawing.DrawLines(rp.Canvas, paint, pixels, LineStyle);
 
         if (MarkerStyle.IsVisible)
         {
